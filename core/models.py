@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -47,6 +48,55 @@ class FaceObservation:
 
 
 @dataclass(slots=True)
+class SessionPerson:
+    person_id: int
+    first_seen: str
+    last_seen: str
+    track_ids: set[int] = field(default_factory=set)
+    observations_count: int = 0
+    emotion_counter: Counter[str] = field(default_factory=Counter)
+    gender_counter: Counter[str] = field(default_factory=Counter)
+    age_group_counter: Counter[str] = field(default_factory=Counter)
+    last_observation: FaceObservation | None = None
+    embedding: list[float] | None = None
+
+    def register_observation(
+        self,
+        observation: FaceObservation,
+        track_id: int,
+        embedding: list[float] | None = None,
+    ) -> None:
+        self.last_seen = observation.timestamp
+        self.last_observation = observation
+        self.track_ids.add(track_id)
+        self.observations_count += 1
+
+        if observation.emotion:
+            self.emotion_counter[observation.emotion] += 1
+        if observation.gender:
+            self.gender_counter[observation.gender] += 1
+        if observation.age_group:
+            self.age_group_counter[observation.age_group] += 1
+        if embedding is not None:
+            self.embedding = embedding
+
+    def dominant_emotion(self) -> str:
+        if not self.emotion_counter:
+            return "unknown"
+        return self.emotion_counter.most_common(1)[0][0]
+
+    def dominant_gender(self) -> str:
+        if not self.gender_counter:
+            return "unknown"
+        return self.gender_counter.most_common(1)[0][0]
+
+    def dominant_age_group(self) -> str:
+        if not self.age_group_counter:
+            return "unknown"
+        return self.age_group_counter.most_common(1)[0][0]
+
+
+@dataclass(slots=True)
 class WeatherSnapshot:
     location_name: str
     timestamp: str
@@ -76,7 +126,8 @@ class SessionState:
     started_at: str
     history: list[FaceObservation] = field(default_factory=list)
     active_faces: dict[int, FaceObservation] = field(default_factory=dict)
-    unique_face_ids: set[int] = field(default_factory=set)
+    people: dict[int, SessionPerson] = field(default_factory=dict)
+    active_track_to_person: dict[int, int] = field(default_factory=dict)
     last_results: dict[int, AnalysisResult] = field(default_factory=dict)
     last_analysis_frame: dict[int, int] = field(default_factory=dict)
     frames_processed: int = 0

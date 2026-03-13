@@ -7,8 +7,11 @@ from core.models import AnalysisResult
 
 try:
     from deepface import DeepFace
-except Exception:  # pragma: no cover - зависит от среды выполнения
+except Exception as import_error:  # pragma: no cover - зависит от среды выполнения
     DeepFace = None  # type: ignore[assignment]
+    _IMPORT_ERROR = import_error
+else:
+    _IMPORT_ERROR = None
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +22,8 @@ class FaceAnalysisService:
         self.available = DeepFace is not None
         if not self.available:
             logger.warning(
-                "Библиотека DeepFace недоступна. Анализ эмоций, пола и возраста будет возвращать 'unknown'."
+                "DeepFace не удалось импортировать: %s. Анализ эмоций, пола, возраста и re-id будут недоступны.",
+                _IMPORT_ERROR,
             )
 
     @staticmethod
@@ -78,3 +82,27 @@ class FaceAnalysisService:
         except Exception as error:  # pragma: no cover - зависит от модели и среды
             logger.exception("Ошибка анализа лица: %s", error)
             return AnalysisResult()
+
+    def extract_embedding(self, face) -> list[float] | None:
+        if face is None or getattr(face, "size", 0) == 0:
+            return None
+        if not self.available:
+            return None
+
+        try:
+            raw: Any = DeepFace.represent(
+                img_path=face,
+                model_name="Facenet512",
+                detector_backend="skip",
+                enforce_detection=False,
+                normalization="base",
+            )
+            if isinstance(raw, list):
+                raw = raw[0]
+            embedding = raw.get("embedding")
+            if not embedding:
+                return None
+            return [float(value) for value in embedding]
+        except Exception as error:  # pragma: no cover - зависит от модели и среды
+            logger.exception("Ошибка извлечения face embedding: %s", error)
+            return None
