@@ -1,0 +1,8 @@
+PySide6>=6.6
+ultralytics>=8.3
+opencv-python>=4.8
+matplotlib>=3.8
+requests>=2.31
+torch>=2.3
+numpy>=1.26
+deepface>=0.0.93
