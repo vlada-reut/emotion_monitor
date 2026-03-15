@@ -15,11 +15,11 @@ class AppConfig:
     title: str = "Emotion Monitor"
     camera_source: int | str = 0
     camera_backend: str = "dshow"
-    frame_width: int = 1280
-    frame_height: int = 720
-    analysis_interval_frames: int = 8
+    frame_width: int = 960
+    frame_height: int = 540
+    analysis_interval_frames: int = 12
     detector_confidence: float = 0.4
-    detector_imgsz: int = 320
+    detector_imgsz: int = 256
     tracker_max_distance: int = 70
     tracker_max_missing: int = 12
 

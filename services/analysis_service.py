@@ -5,26 +5,38 @@ from typing import Any
 
 from core.models import AnalysisResult
 
-try:
-    from deepface import DeepFace
-except Exception as import_error:  # pragma: no cover - зависит от среды выполнения
-    DeepFace = None  # type: ignore[assignment]
-    _IMPORT_ERROR = import_error
-else:
-    _IMPORT_ERROR = None
-
 
 logger = logging.getLogger(__name__)
 
 
 class FaceAnalysisService:
     def __init__(self) -> None:
-        self.available = DeepFace is not None
-        if not self.available:
+        self._deepface = None
+        self._import_error: Exception | None = None
+        self._import_attempted = False
+
+    @property
+    def available(self) -> bool:
+        return self._load_deepface() is not None
+
+    def _load_deepface(self):
+        if self._import_attempted:
+            return self._deepface
+
+        self._import_attempted = True
+        try:
+            from deepface import DeepFace  # type: ignore
+        except Exception as error:  # pragma: no cover
+            self._import_error = error
             logger.warning(
                 "DeepFace не удалось импортировать: %s. Анализ эмоций, пола, возраста и re-id будут недоступны.",
-                _IMPORT_ERROR,
+                error,
             )
+            self._deepface = None
+        else:
+            self._deepface = DeepFace
+
+        return self._deepface
 
     @staticmethod
     def _to_age_group(age: int | None) -> str:
@@ -40,15 +52,25 @@ class FaceAnalysisService:
             return "adult"
         return "senior"
 
-    def analyze(self, face) -> AnalysisResult:
+    @staticmethod
+    def _extract_confidence(raw: Any) -> float | None:
+        emotion_scores = raw.get("emotion", {})
+        if isinstance(emotion_scores, dict) and emotion_scores:
+            numeric_scores = [float(value) for value in emotion_scores.values() if isinstance(value, (int, float))]
+            if numeric_scores:
+                return round(max(numeric_scores), 2)
+        return None
+
+    def analyze_full(self, face) -> AnalysisResult:
         if face is None or getattr(face, "size", 0) == 0:
             return AnalysisResult()
 
-        if not self.available:
+        deepface = self._load_deepface()
+        if deepface is None:
             return AnalysisResult()
 
         try:
-            raw: Any = DeepFace.analyze(
+            raw: Any = deepface.analyze(
                 img_path=face,
                 actions=["emotion", "gender", "age"],
                 enforce_detection=False,
@@ -62,35 +84,60 @@ class FaceAnalysisService:
             gender = str(raw.get("dominant_gender", "unknown"))
             age_value = raw.get("age")
             age = int(age_value) if age_value is not None else None
-            confidence = None
-
-            emotion_scores = raw.get("emotion", {})
-            if isinstance(emotion_scores, dict) and emotion_scores:
-                numeric_scores = [
-                    float(value) for value in emotion_scores.values() if isinstance(value, (int, float))
-                ]
-                if numeric_scores:
-                    confidence = round(max(numeric_scores), 2)
 
             return AnalysisResult(
                 emotion=emotion,
                 gender=gender,
                 age=age,
                 age_group=self._to_age_group(age),
-                confidence=confidence,
+                confidence=self._extract_confidence(raw),
             )
-        except Exception as error:  # pragma: no cover - зависит от модели и среды
-            logger.exception("Ошибка анализа лица: %s", error)
+        except Exception as error:  # pragma: no cover
+            logger.exception("Ошибка полного анализа лица: %s", error)
             return AnalysisResult()
+
+    def analyze_emotion(self, face, base_result: AnalysisResult | None = None) -> AnalysisResult:
+        if face is None or getattr(face, "size", 0) == 0:
+            return base_result or AnalysisResult()
+
+        deepface = self._load_deepface()
+        if deepface is None:
+            return base_result or AnalysisResult()
+
+        base = base_result or AnalysisResult()
+
+        try:
+            raw: Any = deepface.analyze(
+                img_path=face,
+                actions=["emotion"],
+                enforce_detection=False,
+                detector_backend="skip",
+                silent=True,
+            )
+            if isinstance(raw, list):
+                raw = raw[0]
+
+            return AnalysisResult(
+                emotion=str(raw.get("dominant_emotion", base.emotion)).lower(),
+                gender=base.gender,
+                age=base.age,
+                age_group=base.age_group,
+                confidence=self._extract_confidence(raw),
+            )
+        except Exception as error:  # pragma: no cover
+            logger.exception("Ошибка анализа эмоции: %s", error)
+            return base
 
     def extract_embedding(self, face) -> list[float] | None:
         if face is None or getattr(face, "size", 0) == 0:
             return None
-        if not self.available:
+
+        deepface = self._load_deepface()
+        if deepface is None:
             return None
 
         try:
-            raw: Any = DeepFace.represent(
+            raw: Any = deepface.represent(
                 img_path=face,
                 model_name="Facenet512",
                 detector_backend="skip",
@@ -103,6 +150,6 @@ class FaceAnalysisService:
             if not embedding:
                 return None
             return [float(value) for value in embedding]
-        except Exception as error:  # pragma: no cover - зависит от модели и среды
+        except Exception as error:  # pragma: no cover
             logger.exception("Ошибка извлечения face embedding: %s", error)
             return None

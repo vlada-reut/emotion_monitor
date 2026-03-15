@@ -38,7 +38,7 @@ def annotate_frame(frame: np.ndarray, annotations: Iterable[dict]) -> np.ndarray
 
     for ann in annotations:
         x1, y1, x2, y2 = map(int, ann["bbox"])
-        color = ann.get("color", (0, 255, 0))
+        color = ann.get("color", (0, 0, 255))
         cv2.rectangle(output, (x1, y1), (x2, y2), color, 2)
 
     rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
@@ -62,8 +62,8 @@ def annotate_frame(frame: np.ndarray, annotations: Iterable[dict]) -> np.ndarray
         draw.rounded_rectangle(
             (tx, ty, tx + text_w + 12, ty + text_h + 8),
             radius=6,
-            fill=(0, 0, 0),
+            fill=(255, 255, 255),
         )
-        draw.text((tx + 6, ty + 4), label, font=font, fill=(255, 255, 255))
+        draw.text((tx + 6, ty + 4), label, font=font, fill=(24, 36, 56))
 
     return cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)

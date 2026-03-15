@@ -32,6 +32,7 @@ class VideoCapture:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         if height:
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if not self.cap.isOpened():
             raise RuntimeError("Не удалось открыть источник видеопотока")

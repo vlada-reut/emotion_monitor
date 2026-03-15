@@ -87,9 +87,8 @@ class VideoWorker(QThread):
     @staticmethod
     def _build_label(observation: FaceObservation) -> str:
         gender_ru = gender_to_russian(observation.gender)
-        age_group_ru = age_group_to_russian(observation.age_group)
-        emotion_ru = emotion_to_russian(observation.emotion)
-        return f"ID {observation.person_id} | {gender_ru} | {age_group_ru} | {emotion_ru}"
+        age_ru = str(observation.age) if observation.age is not None else age_group_to_russian(observation.age_group)
+        return f"ID {observation.person_id} | {gender_ru} | {age_ru}"
 
     def _should_reanalyze(self, track_id: int) -> bool:
         last_frame = self.session.last_analysis_frame.get(track_id)
@@ -171,7 +170,13 @@ class VideoWorker(QThread):
                         continue
 
                     if self._should_reanalyze(track.track_id):
-                        result = self.analysis_service.analyze(face_crop)
+                        previous_result = self.session.last_results.get(track.track_id)
+                        if previous_result is None or (
+                            previous_result.age is None and previous_result.gender == "unknown"
+                        ):
+                            result = self.analysis_service.analyze_full(face_crop)
+                        else:
+                            result = self.analysis_service.analyze_emotion(face_crop, previous_result)
                         self.session.last_results[track.track_id] = result
                         self.session.last_analysis_frame[track.track_id] = self.session.frames_processed
                     else:
@@ -217,7 +222,7 @@ class VideoWorker(QThread):
                         {
                             "bbox": bbox,
                             "label": self._build_label(observation),
-                            "color": (0, 255, 0),
+                            "color": (0, 0, 255),
                         }
                     )
 

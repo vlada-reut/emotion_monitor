@@ -45,7 +45,8 @@ def build_session_metrics(session: SessionState) -> dict:
     dominant_emotion = dominant_label(dominant_emotions)
 
     return {
-        "people_count": len(session.active_faces),
+        "people_count": len(people),
+        "active_people_count": len(session.active_faces),
         "unique_people_count": len(people),
         "observations_count": len(session.history),
         "frames_processed": session.frames_processed,
