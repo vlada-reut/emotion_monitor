@@ -28,6 +28,7 @@ def build_current_metrics(session: SessionState) -> dict:
     return {
         "people_count": len(session.active_faces),
         "distribution": calculate_distribution(emotions),
+        "unique_emotions": sorted({emotion for emotion in emotions if emotion and emotion != "unknown"}),
         "dominant_emotion": dominant_emotion,
         "group_mood": GROUP_MOOD_MAP.get(dominant_emotion, "неопределенное"),
         "gender_distribution": dict(Counter(genders)),
@@ -51,6 +52,9 @@ def build_session_metrics(session: SessionState) -> dict:
         "observations_count": len(session.history),
         "frames_processed": session.frames_processed,
         "distribution": calculate_distribution(dominant_emotions),
+        "unique_emotions": sorted(
+            {emotion for emotion in dominant_emotions if emotion and emotion != "unknown"}
+        ),
         "dominant_emotion": dominant_emotion,
         "group_mood": GROUP_MOOD_MAP.get(dominant_emotion, "неопределенное"),
         "gender_distribution": dict(Counter(dominant_genders)),

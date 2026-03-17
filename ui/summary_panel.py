@@ -139,3 +139,8 @@ class SummaryPanel(QWidget):
 
     def update_summary(self, text: str) -> None:
         self.summary_text.setPlainText(text)
+
+    def reset(self) -> None:
+        self.mood_value.setText("Ожидание запуска")
+        self.mood_meta.setText("Анализируемых людей: 0")
+        self.summary_text.setPlainText("")

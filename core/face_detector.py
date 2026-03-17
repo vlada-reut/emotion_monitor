@@ -2,17 +2,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ultralytics import YOLO
-
 from services.config_service import BASE_DIR
 
 
 class FaceDetector:
+    _model_cache: dict[Path, object] = {}
+
     def __init__(self, model_path: str, confidence: float = 0.4, imgsz: int = 320) -> None:
         resolved_path = self._resolve_model_path(model_path)
-        self.model = YOLO(str(resolved_path))
+        self.model = self._load_model(resolved_path)
         self.confidence = confidence
         self.imgsz = imgsz
+
+    @classmethod
+    def _load_model(cls, resolved_path: Path):
+        model = cls._model_cache.get(resolved_path)
+        if model is not None:
+            return model
+
+        from ultralytics import YOLO
+
+        model = YOLO(str(resolved_path))
+        cls._model_cache[resolved_path] = model
+        return model
 
     @staticmethod
     def _resolve_model_path(model_path: str) -> Path:

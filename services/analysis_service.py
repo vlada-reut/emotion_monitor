@@ -10,24 +10,33 @@ logger = logging.getLogger(__name__)
 
 
 class FaceAnalysisService:
+    _shared_deepface = None
+    _shared_import_error: Exception | None = None
+    _shared_import_attempted = False
+
     def __init__(self) -> None:
-        self._deepface = None
-        self._import_error: Exception | None = None
-        self._import_attempted = False
+        self._deepface = self.__class__._shared_deepface
+        self._import_error = self.__class__._shared_import_error
+        self._import_attempted = self.__class__._shared_import_attempted
 
     @property
     def available(self) -> bool:
         return self._load_deepface() is not None
 
     def _load_deepface(self):
-        if self._import_attempted:
+        if self.__class__._shared_import_attempted:
+            self._deepface = self.__class__._shared_deepface
+            self._import_error = self.__class__._shared_import_error
+            self._import_attempted = True
             return self._deepface
 
+        self.__class__._shared_import_attempted = True
         self._import_attempted = True
         try:
             from deepface import DeepFace  # type: ignore
         except Exception as error:  # pragma: no cover
             self._import_error = error
+            self.__class__._shared_import_error = error
             logger.warning(
                 "DeepFace не удалось импортировать: %s. Анализ эмоций, пола, возраста и re-id будут недоступны.",
                 error,
@@ -35,6 +44,7 @@ class FaceAnalysisService:
             self._deepface = None
         else:
             self._deepface = DeepFace
+            self.__class__._shared_deepface = DeepFace
 
         return self._deepface
 

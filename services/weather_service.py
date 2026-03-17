@@ -32,6 +32,8 @@ WEATHER_CODE_MAP = {
 
 
 class WeatherService:
+    _session = requests.Session()
+
     def __init__(self, config: WeatherConfig) -> None:
         self.config = config
         self._last_snapshot: WeatherSnapshot | None = None
@@ -56,7 +58,7 @@ class WeatherService:
             "timezone": "auto",
         }
 
-        response = requests.get(
+        response = self._session.get(
             "https://api.open-meteo.com/v1/forecast",
             params=params,
             timeout=self.config.request_timeout,

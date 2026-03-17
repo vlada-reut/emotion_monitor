@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
 
 from analytics.stats import emotion_to_russian
 
@@ -22,6 +20,9 @@ EMOTION_COLORS = {
 class ChartWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+        from matplotlib.figure import Figure
+
         self.figure = Figure(figsize=(4, 4), facecolor="#ffffff")
         self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.setStyleSheet("background: transparent; border: none;")

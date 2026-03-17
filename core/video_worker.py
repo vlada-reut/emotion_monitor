@@ -51,21 +51,27 @@ class VideoWorker(QThread):
             source=settings.app.camera_source,
             backend=settings.app.camera_backend,
         )
-        self.detector = FaceDetector(
-            model_path=settings.models.face_detector_path,
-            confidence=settings.app.detector_confidence,
-            imgsz=settings.app.detector_imgsz,
-        )
-        self.tracker = CentroidTracker(
-            max_distance=settings.app.tracker_max_distance,
-            max_missing=settings.app.tracker_max_missing,
-        )
-        self.analysis_service = FaceAnalysisService()
+        self.detector: FaceDetector | None = None
+        self.tracker: CentroidTracker | None = None
+        self.analysis_service: FaceAnalysisService | None = None
         self.weather_service = WeatherService(settings.weather)
         self.session_logger = SessionLogger(
             logs_dir=settings.logging.logs_dir,
             session_id=self.session.session_id,
         )
+
+    def _initialize_runtime(self) -> None:
+        self.status_changed.emit("Подготовка моделей анализа...")
+        self.detector = FaceDetector(
+            model_path=self.settings.models.face_detector_path,
+            confidence=self.settings.app.detector_confidence,
+            imgsz=self.settings.app.detector_imgsz,
+        )
+        self.tracker = CentroidTracker(
+            max_distance=self.settings.app.tracker_max_distance,
+            max_missing=self.settings.app.tracker_max_missing,
+        )
+        self.analysis_service = FaceAnalysisService()
 
     @staticmethod
     def _clamp_bbox(frame, bbox: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -88,7 +94,8 @@ class VideoWorker(QThread):
     def _build_label(observation: FaceObservation) -> str:
         gender_ru = gender_to_russian(observation.gender)
         age_ru = str(observation.age) if observation.age is not None else age_group_to_russian(observation.age_group)
-        return f"ID {observation.person_id} | {gender_ru} | {age_ru}"
+        emotion_ru = emotion_to_russian(observation.emotion)
+        return f"ID {observation.person_id} | {gender_ru} | {age_ru} | {emotion_ru}"
 
     def _should_reanalyze(self, track_id: int) -> bool:
         last_frame = self.session.last_analysis_frame.get(track_id)
@@ -129,10 +136,10 @@ class VideoWorker(QThread):
                 width=self.settings.app.frame_width,
                 height=self.settings.app.frame_height,
             )
+            self._initialize_runtime()
 
             self.running = True
             self.session_logger.log_event(f"Сессия {self.session.session_id} запущена")
-            self._get_weather_if_needed()
             self.status_changed.emit("Мониторинг запущен")
 
             while self.running:
@@ -149,6 +156,9 @@ class VideoWorker(QThread):
                 self._capture_error_reported = False
                 self.session.frames_processed += 1
                 self._get_weather_if_needed()
+
+                if self.detector is None or self.tracker is None or self.analysis_service is None:
+                    raise RuntimeError("Компоненты анализа видео не инициализированы")
 
                 boxes = self.detector.detect(frame)
                 tracked = self.tracker.update(boxes)

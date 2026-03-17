@@ -11,6 +11,8 @@ from services.config_service import BASE_DIR
 
 
 class SessionLogger:
+    _FLUSH_EVERY = 20
+
     def __init__(self, logs_dir: str, session_id: str) -> None:
         self.logs_dir = (BASE_DIR / logs_dir).resolve()
         self.logs_dir.mkdir(parents=True, exist_ok=True)
@@ -20,6 +22,7 @@ class SessionLogger:
         self.observations_path = self.logs_dir / f"session_{session_id}.jsonl"
         self.summary_path = self.logs_dir / f"session_summary_{session_id}.json"
         self._observations_file = self.observations_path.open("a", encoding="utf-8")
+        self._pending_flush_count = 0
 
         self._setup_app_logger()
         self.app_logger = logging.getLogger("emotion_monitor")
@@ -54,7 +57,10 @@ class SessionLogger:
             payload.update(extra)
 
         self._observations_file.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        self._observations_file.flush()
+        self._pending_flush_count += 1
+        if self._pending_flush_count >= self._FLUSH_EVERY:
+            self._observations_file.flush()
+            self._pending_flush_count = 0
 
     def write_summary(self, summary: dict[str, Any]) -> Path:
         payload = {
@@ -67,4 +73,5 @@ class SessionLogger:
 
     def close(self) -> None:
         if not self._observations_file.closed:
+            self._observations_file.flush()
             self._observations_file.close()

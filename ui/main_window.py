@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import cv2
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap
 from PySide6.QtWidgets import (
@@ -15,10 +17,11 @@ from PySide6.QtWidgets import (
 )
 
 from analytics.stats import emotion_to_russian
-from core.video_worker import VideoWorker
 from services.config_service import Settings
-from ui.chart_widget import ChartWidget
 from ui.summary_panel import SummaryPanel
+
+if TYPE_CHECKING:
+    from core.video_worker import VideoWorker
 
 
 SOFT_BLUE = "#5f88e8"
@@ -40,6 +43,7 @@ class MainWindow(QMainWindow):
         self.worker: VideoWorker | None = None
         self.last_summary_path: str = ""
         self.current_mode = "current"
+        self.monitoring_active = False
 
         self.setWindowTitle(settings.app.title)
         self.resize(1460, 860)
@@ -71,10 +75,14 @@ class MainWindow(QMainWindow):
         self.detected_meta.setObjectName("metaText")
         self.detected_meta.setWordWrap(True)
 
-        self.chart_title_label = QLabel("Аналитика эмоций в текущем кадре")
+        self.chart_title_label = QLabel("Аналитика эмоций в кадре")
         self.chart_title_label.setObjectName("sectionTitle")
 
-        self.chart = ChartWidget()
+        self.chart: QWidget | None = None
+        self.chart_placeholder = QLabel("Запустите мониторинг, чтобы увидеть аналитику эмоций.")
+        self.chart_placeholder.setObjectName("emptyStateLabel")
+        self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.chart_placeholder.setWordWrap(True)
         self.summary_panel = SummaryPanel()
 
         self.current_mode_button = QPushButton("Текущий кадр")
@@ -100,6 +108,47 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self.statusBar().hide()
         self.showMaximized()
+
+    def _reset_detected_emotion_state(self) -> None:
+        self.detected_emotion.setText("Ожидание сигнала")
+        self.detected_meta.setText("Запустите мониторинг, чтобы получить определение эмоции.")
+
+    def _update_chart_title(self) -> None:
+        if self.current_mode == "current":
+            title = "Аналитика эмоций в текущем кадре" if self.monitoring_active else "Аналитика эмоций в кадре"
+        else:
+            title = "Аналитика эмоций за сессию"
+        self.chart_title_label.setText(title)
+
+    def _ensure_chart(self) -> None:
+        if self.chart is not None:
+            return
+
+        from ui.chart_widget import ChartWidget
+
+        self.chart = ChartWidget()
+        self.chart.hide()
+        self.chart_body_layout.addWidget(self.chart)
+
+    def _set_chart_placeholder_visible(self, visible: bool) -> None:
+        self.chart_placeholder.setVisible(visible)
+        if self.chart is not None:
+            self.chart.setVisible(not visible)
+
+    def _set_monitoring_active(self, active: bool) -> None:
+        self.monitoring_active = active
+        self._update_chart_title()
+        if active:
+            self._ensure_chart()
+            self._set_chart_placeholder_visible(False)
+            return
+
+        self._reset_detected_emotion_state()
+        self.top_meta.setText("FPS: 0.00 · Логи: -")
+        if self.chart is None:
+            self._set_chart_placeholder_visible(True)
+        else:
+            self._set_chart_placeholder_visible(False)
 
     def _build_layout(self) -> None:
         page = QWidget()
@@ -168,7 +217,11 @@ class MainWindow(QMainWindow):
         chart_layout.setContentsMargins(16, 16, 16, 16)
         chart_layout.setSpacing(10)
         chart_layout.addWidget(self.chart_title_label)
-        chart_layout.addWidget(self.chart)
+        self.chart_body = QWidget()
+        self.chart_body_layout = QVBoxLayout(self.chart_body)
+        self.chart_body_layout.setContentsMargins(0, 0, 0, 0)
+        self.chart_body_layout.addWidget(self.chart_placeholder)
+        chart_layout.addWidget(self.chart_body)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(12)
@@ -255,6 +308,16 @@ class MainWindow(QMainWindow):
                 font-size: 18px;
                 font-weight: 700;
                 color: #1a2e49;
+            }}
+            #emptyStateLabel {{
+                min-height: 250px;
+                border-radius: 18px;
+                background: #f7fafd;
+                border: 1px dashed #d8e2ee;
+                color: #73859a;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 18px;
             }}
             #videoSurface {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -364,18 +427,18 @@ class MainWindow(QMainWindow):
         self.current_mode = mode
         self.current_mode_button.setChecked(mode == "current")
         self.session_mode_button.setChecked(mode == "session")
-        if mode == "current":
-            self.chart_title_label.setText("Аналитика эмоций в текущем кадре")
-        else:
-            self.chart_title_label.setText("Аналитика эмоций за сессию")
+        self._update_chart_title()
         self.summary_panel.update_summary("")
 
     def start_monitoring(self) -> None:
         if self.worker is not None and self.worker.isRunning():
             return
 
+        from core.video_worker import VideoWorker
+
         self.worker = VideoWorker(self.settings)
         self._connect_worker(self.worker)
+        self._set_monitoring_active(True)
         self.worker.start()
 
         self.start_button.setEnabled(False)
@@ -394,6 +457,8 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(True)
         self.live_badge.hide()
         self._clear_video_surface()
+        self.worker = None
+        self._set_monitoring_active(False)
 
     def on_status_changed(self, status: str) -> None:
         self.top_status.setText(status)
@@ -405,13 +470,20 @@ class MainWindow(QMainWindow):
         self.live_badge.hide()
         self.top_status.setText("Сессия завершена")
         self._clear_video_surface()
+        self.worker = None
+        self._set_monitoring_active(False)
 
     def show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Ошибка", message)
 
     def _update_detected_emotion(self, metrics: dict, mode_label: str, people_count: int) -> None:
+        if not self.monitoring_active:
+            self._reset_detected_emotion_state()
+            return
+
         emotion = metrics.get("dominant_emotion", "unknown")
         distribution = metrics.get("distribution", {})
+        unique_emotions = metrics.get("unique_emotions", [])
 
         if people_count <= 0 or not distribution:
             self.detected_emotion.setText("Нет данных")
@@ -419,9 +491,25 @@ class MainWindow(QMainWindow):
             return
 
         translated = emotion_to_russian(emotion).capitalize()
+        if people_count > 1:
+            unique_labels = ", ".join(
+                emotion_to_russian(item).capitalize() for item in unique_emotions
+            ) or translated
+            self.detected_emotion.setText(unique_labels)
+            distribution_text = ", ".join(
+                f"{emotion_to_russian(key).capitalize()}: {value:.1f}%"
+                for key, value in distribution.items()
+            )
+            self.detected_meta.setText(
+                f"{mode_label} · людей в кадре: {people_count} · доли эмоций в кадре: {distribution_text}"
+            )
+            return
+
         share = distribution.get(emotion, 0.0)
         self.detected_emotion.setText(translated)
-        self.detected_meta.setText(f"{mode_label} · лиц в анализе: {people_count} · доля эмоции: {share:.1f}%")
+        self.detected_meta.setText(
+            f"{mode_label} · людей в кадре: {people_count} · доля эмоции в кадре: {share:.1f}%"
+        )
 
     @staticmethod
     def _build_weather_mood_summary(group_mood: str | None, weather: dict | None) -> str:
@@ -429,8 +517,6 @@ class MainWindow(QMainWindow):
         if not weather:
             return "Погодные данные пока недоступны. Связь между погодой и настроением аудитории будет рассчитана после обновления прогноза."
         weather_text = str(weather.get("weather_text", "текущая погода")).lower()
-        temperature = weather.get("temperature_c")
-        temp_text = f"при температуре {temperature:.1f}°C" if isinstance(temperature, (int, float)) else "при текущей температуре"
 
         positive_moods = {"позитивное", "спокойное", "воодушевленное", "возбужденное"}
         negative_moods = {"подавленное", "напряженное", "тревожное", "негативное"}
@@ -457,7 +543,7 @@ class MainWindow(QMainWindow):
                 f"В группе преобладает {mood} настроение, неблагоприятная погода может дополнительно усиливать общий напряженный или утомленный фон аудитории."
             )
         return (
-            f"Связь между настроением и погодными условиями выглядит нейтральной и требует накопления дополнительных наблюдений."
+            f"Связь между настроением и погодными условиями требует накопления дополнительных наблюдений."
         )
 
     def update_ui(self, frame, payload: dict) -> None:
@@ -469,25 +555,30 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap.fromImage(image)
         self._set_video_pixmap(pixmap)
 
+        frame_metrics = payload.get("current_metrics", {})
+        frame_people_count = int(frame_metrics.get("people_count", 0))
+
         if self.current_mode == "current":
-            metrics = payload.get("current_metrics", {})
+            metrics = frame_metrics
             mode_label = "Текущий кадр"
-            people_count = int(metrics.get("people_count", 0))
-            self.chart_title_label.setText("Аналитика эмоций в текущем кадре")
+            people_count = frame_people_count
         else:
             metrics = payload.get("session_metrics", {})
             mode_label = "Сессия"
             people_count = int(metrics.get("unique_people_count", metrics.get("people_count", 0)))
-            self.chart_title_label.setText("Аналитика эмоций за сессию")
+        self._update_chart_title()
 
-        self.chart.update_chart(metrics.get("distribution", {}), "")
+        self._ensure_chart()
+        self._set_chart_placeholder_visible(False)
+        if self.chart is not None:
+            self.chart.update_chart(metrics.get("distribution", {}), "")
         self.summary_panel.update_overall_mood(
             group_mood=metrics.get("group_mood"),
             dominant_emotion=metrics.get("dominant_emotion"),
             people_count=people_count,
             mode_label=mode_label,
         )
-        self._update_detected_emotion(metrics, mode_label, people_count)
+        self._update_detected_emotion(frame_metrics, mode_label, frame_people_count)
         self.summary_panel.update_summary(
             self._build_weather_mood_summary(metrics.get("group_mood"), payload.get("weather"))
         )
