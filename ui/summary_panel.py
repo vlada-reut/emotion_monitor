@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QTextEdit, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout, QWidget
 
 
 def _build_card(object_name: str) -> QFrame:
@@ -113,8 +113,8 @@ class SummaryPanel(QWidget):
 
     def update_weather_text(self, weather: dict | None) -> None:
         if not weather:
-            self.weather_location.setText("Нет данных")
-            self.weather_description_inline.setText("")
+            self.weather_location.setText("Погода")
+            self.weather_description_inline.setText("в данный момент недоступна")
             self.weather_temperature.setText("—")
             return
 
@@ -143,4 +143,7 @@ class SummaryPanel(QWidget):
     def reset(self) -> None:
         self.mood_value.setText("Ожидание запуска")
         self.mood_meta.setText("Анализируемых людей: 0")
+        self.weather_location.setText("Погода")
+        self.weather_description_inline.setText("в данный момент недоступна")
+        self.weather_temperature.setText("—")
         self.summary_text.setPlainText("")

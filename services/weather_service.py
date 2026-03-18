@@ -47,6 +47,20 @@ class WeatherService:
     def get_last_snapshot(self) -> WeatherSnapshot | None:
         return self._last_snapshot
 
+    def _store_snapshot(self, snapshot: WeatherSnapshot) -> WeatherSnapshot:
+        self._last_snapshot = snapshot
+        self._last_update_ts = datetime.now().timestamp()
+        return snapshot
+
+    def _build_unavailable_snapshot(self) -> WeatherSnapshot:
+        return self._store_snapshot(
+            WeatherSnapshot(
+                location_name=self.config.location_name,
+                timestamp=datetime.now().isoformat(timespec="seconds"),
+                weather_text="погода в данный момент недоступна",
+            )
+        )
+
     def fetch_weather(self) -> WeatherSnapshot | None:
         if not self.config.enabled:
             return None
@@ -58,13 +72,16 @@ class WeatherService:
             "timezone": "auto",
         }
 
-        response = self._session.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params=params,
-            timeout=self.config.request_timeout,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        try:
+            response = self._session.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params=params,
+                timeout=self.config.request_timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException:
+            return self._build_unavailable_snapshot()
 
         current = payload.get("current", {})
         weather_code = current.get("weather_code")
@@ -80,7 +97,4 @@ class WeatherService:
             weather_code=weather_code,
             weather_text=weather_text,
         )
-
-        self._last_snapshot = snapshot
-        self._last_update_ts = datetime.now().timestamp()
-        return snapshot
+        return self._store_snapshot(snapshot)

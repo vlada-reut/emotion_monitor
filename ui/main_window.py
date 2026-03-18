@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import cv2
 from typing import TYPE_CHECKING
 
+import cv2
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap
 from PySide6.QtWidgets import (
@@ -27,6 +27,10 @@ if TYPE_CHECKING:
 SOFT_BLUE = "#5f88e8"
 SOFT_BLUE_HOVER = "#4f79dc"
 ALERT_RED = "#ff4d5f"
+UNAVAILABLE_WEATHER_TEXT = (
+    "Погодные данные пока недоступны. Связь между погодой и настроением аудитории "
+    "будет рассчитана после обновления прогноза."
+)
 
 
 def _card(name: str) -> QFrame:
@@ -71,7 +75,9 @@ class MainWindow(QMainWindow):
         self.detected_caption.setObjectName("metaCaption")
         self.detected_emotion = QLabel("Ожидание сигнала")
         self.detected_emotion.setObjectName("emotionValue")
-        self.detected_meta = QLabel("Запустите мониторинг, чтобы получить первое определение эмоции.")
+        self.detected_meta = QLabel(
+            "Запустите мониторинг, чтобы получить первое определение эмоции."
+        )
         self.detected_meta.setObjectName("metaText")
         self.detected_meta.setWordWrap(True)
 
@@ -79,7 +85,9 @@ class MainWindow(QMainWindow):
         self.chart_title_label.setObjectName("sectionTitle")
 
         self.chart: QWidget | None = None
-        self.chart_placeholder = QLabel("Запустите мониторинг, чтобы увидеть аналитику эмоций.")
+        self.chart_placeholder = QLabel(
+            "Запустите мониторинг, чтобы увидеть аналитику эмоций."
+        )
         self.chart_placeholder.setObjectName("emptyStateLabel")
         self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.chart_placeholder.setWordWrap(True)
@@ -111,11 +119,17 @@ class MainWindow(QMainWindow):
 
     def _reset_detected_emotion_state(self) -> None:
         self.detected_emotion.setText("Ожидание сигнала")
-        self.detected_meta.setText("Запустите мониторинг, чтобы получить определение эмоции.")
+        self.detected_meta.setText(
+            "Запустите мониторинг, чтобы получить определение эмоции."
+        )
 
     def _update_chart_title(self) -> None:
         if self.current_mode == "current":
-            title = "Аналитика эмоций в текущем кадре" if self.monitoring_active else "Аналитика эмоций в кадре"
+            title = (
+                "Аналитика эмоций в текущем кадре"
+                if self.monitoring_active
+                else "Аналитика эмоций в кадре"
+            )
         else:
             title = "Аналитика эмоций за сессию"
         self.chart_title_label.setText(title)
@@ -513,11 +527,14 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _build_weather_mood_summary(group_mood: str | None, weather: dict | None) -> str:
-        mood = (group_mood or "неопределенное").lower()
         if not weather:
-            return "Погодные данные пока недоступны. Связь между погодой и настроением аудитории будет рассчитана после обновления прогноза."
-        weather_text = str(weather.get("weather_text", "текущая погода")).lower()
+            return UNAVAILABLE_WEATHER_TEXT
 
+        weather_text = str(weather.get("weather_text", "текущая погода")).lower().strip()
+        if weather_text == "погода в данный момент недоступна":
+            return UNAVAILABLE_WEATHER_TEXT
+
+        mood = (group_mood or "неопределенное").lower()
         positive_moods = {"позитивное", "спокойное", "воодушевленное", "возбужденное"}
         negative_moods = {"подавленное", "напряженное", "тревожное", "негативное"}
         positive_weather_markers = {"ясно", "солнечно", "малооблачно", "переменная облачность"}
@@ -528,23 +545,25 @@ class MainWindow(QMainWindow):
 
         if mood in positive_moods and weather_positive:
             return (
-                f"В группе наблюдается {mood} настроение, хорошая погода сочетается с комфортным эмоциональным фоном аудитории."
+                f"В группе наблюдается {mood} настроение, хорошая погода сочетается "
+                f"с комфортным эмоциональным фоном аудитории."
             )
         if mood in positive_moods and weather_negative:
             return (
-                f"В группе сохраняется {mood} настроение, погодный фон сейчас не ухудшает общее состояние аудитории."
+                f"В группе сохраняется {mood} настроение, погодный фон сейчас не "
+                f"ухудшает общее состояние аудитории."
             )
         if mood in negative_moods and weather_positive:
             return (
-                f"В группе заметно {mood} настроение, вероятно, на эмоциональный фон сильнее влияют внутренние факторы, а не погодные условия."
+                f"В группе заметно {mood} настроение, вероятно, на эмоциональный фон "
+                f"сильнее влияют внутренние факторы, а не погодные условия."
             )
         if mood in negative_moods and weather_negative:
             return (
-                f"В группе преобладает {mood} настроение, неблагоприятная погода может дополнительно усиливать общий напряженный или утомленный фон аудитории."
+                f"В группе преобладает {mood} настроение, неблагоприятная погода может "
+                f"дополнительно усиливать общий напряженный или утомленный фон аудитории."
             )
-        return (
-            f"Связь между настроением и погодными условиями требует накопления дополнительных наблюдений."
-        )
+        return "Связь между настроением и погодными условиями требует накопления дополнительных наблюдений."
 
     def update_ui(self, frame, payload: dict) -> None:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -582,7 +601,9 @@ class MainWindow(QMainWindow):
         self.summary_panel.update_summary(
             self._build_weather_mood_summary(metrics.get("group_mood"), payload.get("weather"))
         )
-        self.top_meta.setText(f"FPS: {float(payload.get('fps', 0.0)):.2f} · Логи: {payload.get('logs_dir', '-')}")
+        self.top_meta.setText(
+            f"FPS: {float(payload.get('fps', 0.0)):.2f} · Логи: {payload.get('logs_dir', '-')}"
+        )
         self.summary_panel.update_weather_text(payload.get("weather"))
 
     def closeEvent(self, event: QCloseEvent) -> None:

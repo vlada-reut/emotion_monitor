@@ -113,11 +113,21 @@ class VideoWorker(QThread):
             snapshot = self.weather_service.fetch_weather()
             self.session.last_weather = snapshot
 
-            if snapshot is not None:
+            if snapshot is None:
+                return
+
+            if snapshot.weather_text == "погода в данный момент недоступна":
                 self.session_logger.log_event(
-                    f"Получены погодные данные: "
-                    f"{snapshot.location_name}, {snapshot.temperature_c}°C, {snapshot.weather_text}"
+                    "Погодные данные временно недоступны. Приложение продолжает работу без них.",
+                    level=logging.WARNING,
                 )
+                self.status_changed.emit("Погода в данный момент недоступна")
+                return
+
+            self.session_logger.log_event(
+                f"Получены погодные данные: "
+                f"{snapshot.location_name}, {snapshot.temperature_c}°C, {snapshot.weather_text}"
+            )
         except Exception as error:
             self.session_logger.log_event(
                 f"Не удалось получить погодные данные: {error}",

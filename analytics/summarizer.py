@@ -3,6 +3,11 @@ from __future__ import annotations
 from analytics.stats import age_group_to_russian, emotion_to_russian, gender_to_russian
 
 
+UNAVAILABLE_WEATHER_TEXT = (
+    "Погодные данные пока недоступны. Связь между погодой и настроением аудитории "
+    "будет рассчитана после обновления прогноза."
+)
+
 
 def build_text_summary(metrics: dict, weather: dict | None = None, mode: str = "current") -> str:
     people_count = metrics.get("people_count", 0)
@@ -43,14 +48,18 @@ def build_text_summary(metrics: dict, weather: dict | None = None, mode: str = "
             lines.append(f"Возрастные группы: {age_text}.")
 
     if weather:
-        parts = []
-        if weather.get("location_name"):
-            parts.append(weather["location_name"])
-        if weather.get("temperature_c") is not None:
-            parts.append(f"{weather['temperature_c']}°C")
-        if weather.get("weather_text"):
-            parts.append(str(weather["weather_text"]))
-        if parts:
-            lines.append(f"Погодные условия: {', '.join(parts)}.")
+        weather_text = str(weather.get("weather_text", "")).strip().lower()
+        if weather_text == "погода в данный момент недоступна":
+            lines.append(UNAVAILABLE_WEATHER_TEXT)
+        else:
+            parts = []
+            if weather.get("location_name"):
+                parts.append(str(weather["location_name"]))
+            if weather.get("temperature_c") is not None:
+                parts.append(f"{weather['temperature_c']}°C")
+            if weather.get("weather_text"):
+                parts.append(str(weather["weather_text"]))
+            if parts:
+                lines.append(f"Погодные условия: {', '.join(parts)}.")
 
     return "\n".join(lines)
