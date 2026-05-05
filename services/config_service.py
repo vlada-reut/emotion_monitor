@@ -22,6 +22,7 @@ class AppConfig:
     detector_imgsz: int = 256
     tracker_max_distance: int = 70
     tracker_max_missing: int = 12
+    session_stats_min_observations: int = 3
 
 
 @dataclass(slots=True)
@@ -47,8 +48,12 @@ class LoggingConfig:
 @dataclass(slots=True)
 class DatabaseConfig:
     path: str = "data/emotion_monitor.db"
-    similarity_threshold: float = 0.82
+    similarity_threshold: float = 0.74
     search_limit: int = 100
+    max_embeddings_per_user: int = 12
+    min_samples_for_new_user: int = 3
+    identity_retry_interval_frames: int = 10
+    min_face_size_for_identity: int = 96
 
 
 @dataclass(slots=True)

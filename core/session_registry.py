@@ -10,11 +10,11 @@ from core.models import FaceObservation, SessionPerson, SessionState
 
 @dataclass(slots=True)
 class ReIdConfig:
-    similarity_threshold: float = 0.72
+    similarity_threshold: float = 0.68
 
 
 class SessionRegistry:
-    def __init__(self, session: SessionState, similarity_threshold: float = 0.72) -> None:
+    def __init__(self, session: SessionState, similarity_threshold: float = 0.68) -> None:
         self.session = session
         self.config = ReIdConfig(similarity_threshold=similarity_threshold)
         self._next_person_id = 0
@@ -85,17 +85,19 @@ class SessionRegistry:
         for person_id, person in self.session.people.items():
             if person_id in current_active_person_ids:
                 continue
-            if not person.embedding:
+            samples = person.embeddings or ([person.embedding] if person.embedding else [])
+            if not samples:
                 continue
 
-            candidate = self._to_unit_vector(person.embedding)
-            if candidate is None:
-                continue
+            for sample in samples:
+                candidate = self._to_unit_vector(sample)
+                if candidate is None:
+                    continue
 
-            similarity = float(np.dot(probe, candidate))
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_person_id = person_id
+                similarity = float(np.dot(probe, candidate))
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_person_id = person_id
 
         if best_person_id is None:
             return None

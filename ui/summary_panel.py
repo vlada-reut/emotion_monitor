@@ -103,12 +103,15 @@ class SummaryPanel(QWidget):
         return card
 
     def update_status(self, text: str) -> None:
+        del text
         return
 
     def update_fps(self, fps: float) -> None:
+        del fps
         return
 
     def update_logs_path(self, path: str) -> None:
+        del path
         return
 
     def update_weather_text(self, weather: dict | None) -> None:
@@ -131,10 +134,14 @@ class SummaryPanel(QWidget):
         group_mood: str | None,
         dominant_emotion: str | None,
         people_count: int,
-        mode_label: str,
+        is_session_mode: bool,
     ) -> None:
+        del dominant_emotion
         mood = (group_mood or "неопределенное").capitalize()
         self.mood_value.setText(mood)
+        if is_session_mode:
+            self.mood_meta.setText(f"Учтено в статистике: {people_count}")
+            return
         self.mood_meta.setText(f"Анализируемых людей: {people_count}")
 
     def update_summary(self, text: str) -> None:

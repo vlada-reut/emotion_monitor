@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         self.worker: VideoWorker | None = None
         self.last_summary_path: str = ""
         self.current_mode = "current"
+        self.current_page = "monitoring"
         self.monitoring_active = False
 
         self.setWindowTitle(settings.app.title)
@@ -108,6 +110,19 @@ class MainWindow(QMainWindow):
         self.session_mode_button.setCheckable(True)
         self.session_mode_button.clicked.connect(lambda: self.set_mode("session"))
 
+        self.monitoring_page_button = QPushButton("РњРѕРЅРёС‚РѕСЂРёРЅРі")
+        self.monitoring_page_button.setObjectName("sectionButton")
+        self.monitoring_page_button.setCheckable(True)
+        self.monitoring_page_button.setChecked(True)
+        self.monitoring_page_button.setText("\u041c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433")
+        self.monitoring_page_button.clicked.connect(lambda: self.set_page("monitoring"))
+
+        self.users_page_button = QPushButton("РџРѕР»СЊР·РѕРІР°С‚РµР»Рё")
+        self.users_page_button.setObjectName("sectionButton")
+        self.users_page_button.setCheckable(True)
+        self.users_page_button.setText("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438")
+        self.users_page_button.clicked.connect(lambda: self.set_page("users"))
+
         self.start_button = QPushButton("Начать мониторинг")
         self.start_button.setObjectName("primaryButton")
         self.stop_button = QPushButton("Остановить")
@@ -118,6 +133,7 @@ class MainWindow(QMainWindow):
         self.stop_button.clicked.connect(self.stop_monitoring)
 
         self._build_layout()
+        self.set_page("monitoring")
         self.statusBar().hide()
         self.showMaximized()
 
@@ -190,6 +206,18 @@ class MainWindow(QMainWindow):
         controls_layout.setContentsMargins(16, 12, 16, 12)
         controls_layout.setSpacing(12)
 
+        section_caption = QLabel("Р Р°Р·РґРµР»")
+        section_caption.setObjectName("controlLabel")
+        section_caption.setText("\u0420\u0430\u0437\u0434\u0435\u043b")
+
+        section_switch = QWidget()
+        section_switch.setObjectName("sectionSwitch")
+        section_switch_layout = QHBoxLayout(section_switch)
+        section_switch_layout.setContentsMargins(4, 4, 4, 4)
+        section_switch_layout.setSpacing(4)
+        section_switch_layout.addWidget(self.monitoring_page_button)
+        section_switch_layout.addWidget(self.users_page_button)
+
         mode_caption = QLabel("Режим аналитики")
         mode_caption.setObjectName("controlLabel")
 
@@ -201,8 +229,16 @@ class MainWindow(QMainWindow):
         mode_switch_layout.addWidget(self.current_mode_button)
         mode_switch_layout.addWidget(self.session_mode_button)
 
-        controls_layout.addWidget(mode_caption)
-        controls_layout.addWidget(mode_switch)
+        self.analytics_controls = QWidget()
+        analytics_controls_layout = QHBoxLayout(self.analytics_controls)
+        analytics_controls_layout.setContentsMargins(0, 0, 0, 0)
+        analytics_controls_layout.setSpacing(12)
+        analytics_controls_layout.addWidget(mode_caption)
+        analytics_controls_layout.addWidget(mode_switch)
+
+        controls_layout.addWidget(section_caption)
+        controls_layout.addWidget(section_switch)
+        controls_layout.addWidget(self.analytics_controls)
         controls_layout.addStretch()
         controls_layout.addWidget(self.start_button)
         controls_layout.addWidget(self.stop_button)
@@ -244,17 +280,28 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.setSpacing(12)
         right_layout.addWidget(chart_card, stretch=3)
-        right_layout.addWidget(self.summary_panel, stretch=3)
-        right_layout.addWidget(self.user_search_panel, stretch=4)
+        right_layout.addWidget(self.summary_panel, stretch=4)
 
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(12)
-        content_layout.addWidget(video_card, stretch=12)
-        content_layout.addLayout(right_layout, stretch=8)
+        monitoring_page = QWidget()
+        monitoring_layout = QHBoxLayout(monitoring_page)
+        monitoring_layout.setContentsMargins(0, 0, 0, 0)
+        monitoring_layout.setSpacing(12)
+        monitoring_layout.addWidget(video_card, stretch=12)
+        monitoring_layout.addLayout(right_layout, stretch=8)
+
+        users_page = QWidget()
+        users_layout = QVBoxLayout(users_page)
+        users_layout.setContentsMargins(0, 0, 0, 0)
+        users_layout.setSpacing(12)
+        users_layout.addWidget(self.user_search_panel)
+
+        self.content_stack = QStackedWidget()
+        self.content_stack.addWidget(monitoring_page)
+        self.content_stack.addWidget(users_page)
 
         page_layout.addLayout(header_layout)
         page_layout.addWidget(controls_card)
-        page_layout.addLayout(content_layout, stretch=1)
+        page_layout.addWidget(self.content_stack, stretch=1)
 
         self.setCentralWidget(page)
 
@@ -355,12 +402,12 @@ class MainWindow(QMainWindow):
                 font-size: 11px;
                 font-weight: 700;
             }}
-            #modeSwitch {{
+            #modeSwitch, #sectionSwitch {{
                 background: #eef3f8;
                 border: 1px solid #d8e2ee;
                 border-radius: 14px;
             }}
-            #modeButton {{
+            #modeButton, #sectionButton {{
                 min-height: 36px;
                 min-width: 132px;
                 padding: 0 14px;
@@ -371,7 +418,7 @@ class MainWindow(QMainWindow):
                 font-size: 13px;
                 font-weight: 600;
             }}
-            #modeButton:checked {{
+            #modeButton:checked, #sectionButton:checked {{
                 background: #ffffff;
                 color: #27425e;
             }}
@@ -419,6 +466,14 @@ class MainWindow(QMainWindow):
                 background: #f8fbff;
                 padding: 0 12px;
                 color: #1d2d44;
+            }}
+            #filterCombo QAbstractItemView {{
+                background: #ffffff;
+                color: #1d2d44;
+                border: 1px solid #d8e2ee;
+                selection-background-color: #e8f0ff;
+                selection-color: #16345a;
+                outline: none;
             }}
             #usersList, #detailsText {{
                 background: #f8fbff;
@@ -472,6 +527,21 @@ class MainWindow(QMainWindow):
         self.session_mode_button.setChecked(mode == "session")
         self._update_chart_title()
         self.summary_panel.update_summary("")
+
+    def set_page(self, page: str) -> None:
+        self.current_page = page
+        is_monitoring_page = page == "monitoring"
+
+        self.monitoring_page_button.setChecked(is_monitoring_page)
+        self.users_page_button.setChecked(not is_monitoring_page)
+        self.analytics_controls.setVisible(is_monitoring_page)
+        self.content_stack.setCurrentIndex(0 if is_monitoring_page else 1)
+
+        if is_monitoring_page:
+            self._update_chart_title()
+            return
+
+        self.user_search_panel.refresh_results()
 
     def start_monitoring(self) -> None:
         if self.worker is not None and self.worker.isRunning():
@@ -614,7 +684,7 @@ class MainWindow(QMainWindow):
         else:
             metrics = payload.get("session_metrics", {})
             mode_label = "Сессия"
-            people_count = int(metrics.get("unique_people_count", metrics.get("people_count", 0)))
+            people_count = int(metrics.get("people_count", 0))
         self._update_chart_title()
 
         self._ensure_chart()
@@ -625,7 +695,7 @@ class MainWindow(QMainWindow):
             group_mood=metrics.get("group_mood"),
             dominant_emotion=metrics.get("dominant_emotion"),
             people_count=people_count,
-            mode_label=mode_label,
+            is_session_mode=self.current_mode == "session",
         )
         self._update_detected_emotion(frame_metrics, mode_label, frame_people_count)
         self.summary_panel.update_summary(

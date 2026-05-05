@@ -63,6 +63,7 @@ class SessionPerson:
     age_group_counter: Counter[str] = field(default_factory=Counter)
     last_observation: FaceObservation | None = None
     embedding: list[float] | None = None
+    embeddings: list[list[float]] = field(default_factory=list)
 
     def register_observation(
         self,
@@ -82,7 +83,11 @@ class SessionPerson:
         if observation.age_group:
             self.age_group_counter[observation.age_group] += 1
         if embedding is not None:
-            self.embedding = embedding
+            normalized_embedding = [float(value) for value in embedding]
+            self.embedding = normalized_embedding
+            self.embeddings.append(normalized_embedding)
+            if len(self.embeddings) > 6:
+                self.embeddings.pop(0)
 
     def dominant_emotion(self) -> str:
         if not self.emotion_counter:
