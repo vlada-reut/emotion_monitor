@@ -25,6 +25,7 @@ from core.tracker import CentroidTracker
 from core.video_capture import VideoCapture
 from services.analysis_service import FaceAnalysisService
 from services.config_service import Settings
+from services.database_service import UserDatabaseService
 from services.session_logger import SessionLogger
 from services.weather_service import WeatherService
 
@@ -38,11 +39,13 @@ class VideoWorker(QThread):
     status_changed = Signal(str)
     session_finished = Signal(str)
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, user_database: UserDatabaseService | None = None) -> None:
         super().__init__()
         self.settings = settings
+        self.user_database = user_database
         self.running = False
         self._capture_error_reported = False
+        self._resolved_users: dict[int, tuple[int, str]] = {}
 
         self.session = SessionState.create()
         self.registry = SessionRegistry(self.session)
@@ -95,7 +98,40 @@ class VideoWorker(QThread):
         gender_ru = gender_to_russian(observation.gender)
         age_ru = str(observation.age) if observation.age is not None else age_group_to_russian(observation.age_group)
         emotion_ru = emotion_to_russian(observation.emotion)
-        return f"ID {observation.person_id} | {gender_ru} | {age_ru} | {emotion_ru}"
+        label_id = observation.user_id if observation.user_id is not None else observation.person_id
+        return f"ID {label_id} | {gender_ru} | {age_ru} | {emotion_ru}"
+
+    def _resolve_database_user(
+        self,
+        session_person_id: int,
+        timestamp: str,
+        result: AnalysisResult,
+        embedding: list[float] | None,
+    ) -> tuple[int, str] | None:
+        cached = self._resolved_users.get(session_person_id)
+        if cached is not None:
+            return cached
+        if self.user_database is None:
+            return None
+
+        try:
+            user = self.user_database.resolve_user(
+                embedding=embedding,
+                observed_at=timestamp,
+                gender=result.gender,
+                age_group=result.age_group,
+            )
+        except Exception as error:
+            logger.exception("Не удалось сопоставить пользователя с базой: %s", error)
+            self.session_logger.log_event(
+                f"Не удалось сопоставить пользователя с базой: {error}",
+                level=logging.WARNING,
+            )
+            return None
+
+        resolved = (user.user_id, user.display_name)
+        self._resolved_users[session_person_id] = resolved
+        return resolved
 
     def _should_reanalyze(self, track_id: int) -> bool:
         last_frame = self.session.last_analysis_frame.get(track_id)
@@ -211,9 +247,18 @@ class VideoWorker(QThread):
                         embedding=embedding,
                     )
 
+                    timestamp = datetime.now().isoformat(timespec="seconds")
+                    resolved_user = self._resolve_database_user(
+                        session_person_id=person_id,
+                        timestamp=timestamp,
+                        result=result,
+                        embedding=embedding,
+                    )
+
                     observation = FaceObservation(
                         person_id=person_id,
-                        timestamp=datetime.now().isoformat(timespec="seconds"),
+                        user_id=resolved_user[0] if resolved_user is not None else None,
+                        timestamp=timestamp,
                         bbox=bbox,
                         emotion=result.emotion,
                         gender=result.gender,
@@ -227,6 +272,10 @@ class VideoWorker(QThread):
                         observation=observation,
                         embedding=embedding,
                     )
+                    person = self.session.people.get(person_id)
+                    if person is not None and resolved_user is not None:
+                        person.user_id = resolved_user[0]
+                        person.display_name = resolved_user[1]
                     current_active_faces[person_id] = observation
 
                     self.session_logger.log_observation(
@@ -296,6 +345,15 @@ class VideoWorker(QThread):
             try:
                 summary = build_full_summary(self.session)
                 summary_path = str(self.session_logger.write_summary(summary))
+                if self.user_database is not None:
+                    try:
+                        self.user_database.save_session(self.session, summary_path)
+                    except Exception as error:
+                        logger.exception("Не удалось сохранить данные сессии в базу: %s", error)
+                        self.session_logger.log_event(
+                            f"Не удалось сохранить данные сессии в базу: {error}",
+                            level=logging.WARNING,
+                        )
                 self.session_logger.log_event(
                     f"Сессия {self.session.session_id} завершена. "
                     f"Итоговый отчет сохранен: {summary_path}"

@@ -45,11 +45,19 @@ class LoggingConfig:
 
 
 @dataclass(slots=True)
+class DatabaseConfig:
+    path: str = "data/emotion_monitor.db"
+    similarity_threshold: float = 0.82
+    search_limit: int = 100
+
+
+@dataclass(slots=True)
 class Settings:
     app: AppConfig
     models: ModelsConfig
     weather: WeatherConfig
     logging: LoggingConfig
+    database: DatabaseConfig
 
 
 def _merge_dict(defaults: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -68,6 +76,7 @@ def _default_settings_dict() -> dict[str, Any]:
         "models": asdict(ModelsConfig()),
         "weather": asdict(WeatherConfig()),
         "logging": asdict(LoggingConfig()),
+        "database": asdict(DatabaseConfig()),
     }
 
 
@@ -84,6 +93,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         models=ModelsConfig(**raw["models"]),
         weather=WeatherConfig(**raw["weather"]),
         logging=LoggingConfig(**raw["logging"]),
+        database=DatabaseConfig(**raw["database"]),
     )
 
 
@@ -93,6 +103,7 @@ __all__ = [
     "ModelsConfig",
     "WeatherConfig",
     "LoggingConfig",
+    "DatabaseConfig",
     "BASE_DIR",
     "DEFAULT_CONFIG_PATH",
     "load_settings",

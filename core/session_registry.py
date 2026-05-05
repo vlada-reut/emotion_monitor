@@ -51,6 +51,8 @@ class SessionRegistry:
         if person is None:
             person = SessionPerson(
                 person_id=observation.person_id,
+                user_id=observation.user_id,
+                display_name=None,
                 first_seen=observation.timestamp,
                 last_seen=observation.timestamp,
             )

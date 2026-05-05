@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
 
 from analytics.stats import emotion_to_russian
 from services.config_service import Settings
+from services.database_service import UserDatabaseService
 from ui.summary_panel import SummaryPanel
+from ui.user_search_panel import UserSearchPanel
 
 if TYPE_CHECKING:
     from core.video_worker import VideoWorker
@@ -44,6 +46,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
         self.settings = settings
+        self.user_database = UserDatabaseService(settings.database)
         self.worker: VideoWorker | None = None
         self.last_summary_path: str = ""
         self.current_mode = "current"
@@ -92,6 +95,7 @@ class MainWindow(QMainWindow):
         self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.chart_placeholder.setWordWrap(True)
         self.summary_panel = SummaryPanel()
+        self.user_search_panel = UserSearchPanel(self.user_database)
 
         self.current_mode_button = QPushButton("Текущий кадр")
         self.current_mode_button.setObjectName("modeButton")
@@ -240,7 +244,8 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.setSpacing(12)
         right_layout.addWidget(chart_card, stretch=3)
-        right_layout.addWidget(self.summary_panel, stretch=4)
+        right_layout.addWidget(self.summary_panel, stretch=3)
+        right_layout.addWidget(self.user_search_panel, stretch=4)
 
         content_layout = QHBoxLayout()
         content_layout.setSpacing(12)
@@ -278,7 +283,7 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 color: #7a8b9e;
             }}
-            #controlsCard, #panelCard, #emotionCard, #moodCard, #weatherCard, #summaryCard {{
+            #controlsCard, #panelCard, #emotionCard, #moodCard, #weatherCard, #summaryCard, #userDatabaseCard {{
                 background: #ffffff;
                 border: 1px solid #e4ebf3;
                 border-radius: 22px;
@@ -407,6 +412,30 @@ class MainWindow(QMainWindow):
                 padding: 0px;
                 color: #38506b;
             }}
+            #searchInput, #filterCombo {{
+                min-height: 38px;
+                border-radius: 12px;
+                border: 1px solid #d8e2ee;
+                background: #f8fbff;
+                padding: 0 12px;
+                color: #1d2d44;
+            }}
+            #usersList, #detailsText {{
+                background: #f8fbff;
+                border: 1px solid #d8e2ee;
+                border-radius: 16px;
+                padding: 8px;
+                color: #38506b;
+            }}
+            #usersList::item {{
+                padding: 8px;
+                border-radius: 12px;
+                margin: 2px 0;
+            }}
+            #usersList::item:selected {{
+                background: #e8f0ff;
+                color: #16345a;
+            }}
             """
         )
 
@@ -450,7 +479,7 @@ class MainWindow(QMainWindow):
 
         from core.video_worker import VideoWorker
 
-        self.worker = VideoWorker(self.settings)
+        self.worker = VideoWorker(self.settings, self.user_database)
         self._connect_worker(self.worker)
         self._set_monitoring_active(True)
         self.worker.start()
@@ -479,6 +508,7 @@ class MainWindow(QMainWindow):
 
     def on_session_finished(self, summary_path: str) -> None:
         self.last_summary_path = summary_path
+        self.user_search_panel.refresh_results()
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.live_badge.hide()

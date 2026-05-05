@@ -70,6 +70,8 @@ def build_full_summary(session: SessionState) -> dict:
         people_summary.append(
             {
                 "person_id": person.person_id,
+                "user_id": person.user_id,
+                "display_name": person.display_name,
                 "first_seen": person.first_seen,
                 "last_seen": person.last_seen,
                 "track_ids": sorted(person.track_ids),

@@ -24,5 +24,10 @@
   },
   "logging": {
     "logs_dir": "logs"
+  },
+  "database": {
+    "path": "data/emotion_monitor.db",
+    "similarity_threshold": 0.82,
+    "search_limit": 100
   }
 }
