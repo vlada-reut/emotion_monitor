@@ -75,3 +75,13 @@ class SessionLogger:
         if not self._observations_file.closed:
             self._observations_file.flush()
             self._observations_file.close()
+
+        logger = logging.getLogger("emotion_monitor")
+        for handler in list(logger.handlers):
+            if not isinstance(handler, logging.FileHandler):
+                continue
+            if Path(handler.baseFilename) != self.events_log_path:
+                continue
+            handler.flush()
+            handler.close()
+            logger.removeHandler(handler)

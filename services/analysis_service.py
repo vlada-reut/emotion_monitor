@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from core.models import AnalysisResult
 
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_deepface_runtime() -> None:
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
 class FaceAnalysisService:
@@ -33,6 +39,7 @@ class FaceAnalysisService:
         self.__class__._shared_import_attempted = True
         self._import_attempted = True
         try:
+            _configure_deepface_runtime()
             from deepface import DeepFace  # type: ignore
         except Exception as error:  # pragma: no cover
             self._import_error = error

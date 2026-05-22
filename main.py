@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import sys
 
 from PySide6.QtGui import QColor, QPalette
@@ -7,6 +9,11 @@ from PySide6.QtWidgets import QApplication
 
 from services.config_service import load_settings
 from ui.main_window import MainWindow
+
+
+def configure_runtime_warnings() -> None:
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
 def apply_light_theme(app: QApplication) -> None:
@@ -50,6 +57,7 @@ def apply_light_theme(app: QApplication) -> None:
 
 
 def main() -> None:
+    configure_runtime_warnings()
     settings = load_settings()
     app = QApplication(sys.argv)
     apply_light_theme(app)
