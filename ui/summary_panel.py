@@ -15,7 +15,7 @@ class SummaryPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self.mood_title = QLabel("Общее настроение аудитории")
+        self.mood_title = QLabel("Общее настроение")
         self.mood_value = QLabel("Ожидание запуска")
         self.mood_meta = QLabel("Анализируемых людей: 0")
 
