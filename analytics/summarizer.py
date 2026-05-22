@@ -13,10 +13,11 @@ def build_text_summary(metrics: dict, weather: dict | None = None, mode: str = "
     people_count = metrics.get("people_count", 0)
     dominant_emotion = emotion_to_russian(metrics.get("dominant_emotion", "unknown"))
     group_mood = metrics.get("group_mood", "неопределенное")
+    people_label = "Людей в кадре" if mode == "current" else "Учтено в статистике"
 
     lines = [
         f"Режим анализа: {'текущий кадр' if mode == 'current' else 'вся сессия'}.",
-        f"Людей в кадре: {people_count}.",
+        f"{people_label}: {people_count}.",
         f"Преобладающая эмоция: {dominant_emotion}.",
         f"Общее настроение группы: {group_mood}.",
     ]

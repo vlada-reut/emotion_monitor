@@ -25,6 +25,7 @@ from core.tracker import CentroidTracker
 from core.video_capture import VideoCapture
 from services.analysis_service import FaceAnalysisService
 from services.config_service import Settings
+from services.database_service import UserDatabaseService
 from services.session_logger import SessionLogger
 from services.weather_service import WeatherService
 
@@ -38,11 +39,14 @@ class VideoWorker(QThread):
     status_changed = Signal(str)
     session_finished = Signal(str)
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, user_database: UserDatabaseService | None = None) -> None:
         super().__init__()
         self.settings = settings
+        self.user_database = user_database
         self.running = False
         self._capture_error_reported = False
+        self._resolved_users: dict[int, tuple[int, str]] = {}
+        self._identity_attempt_frames: dict[int, int] = {}
 
         self.session = SessionState.create()
         self.registry = SessionRegistry(self.session)
@@ -95,13 +99,63 @@ class VideoWorker(QThread):
         gender_ru = gender_to_russian(observation.gender)
         age_ru = str(observation.age) if observation.age is not None else age_group_to_russian(observation.age_group)
         emotion_ru = emotion_to_russian(observation.emotion)
-        return f"ID {observation.person_id} | {gender_ru} | {age_ru} | {emotion_ru}"
+        label_id = observation.user_id if observation.user_id is not None else observation.person_id
+        return f"ID {label_id} | {gender_ru} | {age_ru} | {emotion_ru}"
+
+    def _resolve_database_user(
+        self,
+        session_person_id: int,
+        timestamp: str,
+        result: AnalysisResult,
+        embedding: list[float] | None,
+        create_if_missing: bool,
+    ) -> tuple[int, str] | None:
+        cached = self._resolved_users.get(session_person_id)
+        if cached is not None:
+            return cached
+        if self.user_database is None:
+            return None
+
+        try:
+            user = self.user_database.resolve_user(
+                embedding=embedding,
+                observed_at=timestamp,
+                gender=result.gender,
+                age_group=result.age_group,
+                create_if_missing=create_if_missing,
+            )
+        except Exception as error:
+            logger.exception("Не удалось сопоставить пользователя с базой: %s", error)
+            self.session_logger.log_event(
+                f"Не удалось сопоставить пользователя с базой: {error}",
+                level=logging.WARNING,
+            )
+            return None
+        if user is None:
+            return None
+
+        resolved = (user.user_id, user.display_name)
+        self._resolved_users[session_person_id] = resolved
+        return resolved
 
     def _should_reanalyze(self, track_id: int) -> bool:
         last_frame = self.session.last_analysis_frame.get(track_id)
         if last_frame is None:
             return True
         return (self.session.frames_processed - last_frame) >= self.settings.app.analysis_interval_frames
+
+    def _is_suitable_for_identity(self, bbox: tuple[int, int, int, int]) -> bool:
+        x1, y1, x2, y2 = bbox
+        min_face_size = int(self.settings.database.min_face_size_for_identity)
+        return (x2 - x1) >= min_face_size and (y2 - y1) >= min_face_size
+
+    def _should_retry_identity(self, person_id: int) -> bool:
+        last_attempt = self._identity_attempt_frames.get(person_id)
+        if last_attempt is None:
+            return True
+        return (
+            self.session.frames_processed - last_attempt
+        ) >= int(self.settings.database.identity_retry_interval_frames)
 
     def _get_weather_if_needed(self) -> None:
         now_ts = time.time()
@@ -202,18 +256,35 @@ class VideoWorker(QThread):
                     else:
                         result = self.session.last_results.get(track.track_id, AnalysisResult())
 
-                    embedding = None
+                    known_person_id = self.session.active_track_to_person.get(track.track_id)
+                    should_attempt_identity = False
                     if track.track_id not in self.session.active_track_to_person:
+                        should_attempt_identity = self._is_suitable_for_identity(bbox)
+                    elif known_person_id is not None:
+                        known_person = self.session.people.get(known_person_id)
+                        should_attempt_identity = (
+                            known_person is not None
+                            and known_person.user_id is None
+                            and self._is_suitable_for_identity(bbox)
+                            and self._should_retry_identity(known_person_id)
+                        )
+
+                    embedding = None
+                    if should_attempt_identity:
                         embedding = self.analysis_service.extract_embedding(face_crop)
 
                     person_id = self.registry.resolve_person_id(
                         track.track_id,
                         embedding=embedding,
                     )
+                    if embedding is not None:
+                        self._identity_attempt_frames[person_id] = self.session.frames_processed
 
+                    timestamp = datetime.now().isoformat(timespec="seconds")
                     observation = FaceObservation(
                         person_id=person_id,
-                        timestamp=datetime.now().isoformat(timespec="seconds"),
+                        user_id=None,
+                        timestamp=timestamp,
                         bbox=bbox,
                         emotion=result.emotion,
                         gender=result.gender,
@@ -227,6 +298,25 @@ class VideoWorker(QThread):
                         observation=observation,
                         embedding=embedding,
                     )
+                    person = self.session.people.get(person_id)
+                    if person is not None:
+                        if person.user_id is not None:
+                            observation.user_id = person.user_id
+                        elif embedding is not None:
+                            resolved_user = self._resolve_database_user(
+                                session_person_id=person_id,
+                                timestamp=timestamp,
+                                result=result,
+                                embedding=embedding,
+                                create_if_missing=(
+                                    len(person.embeddings)
+                                    >= int(self.settings.database.min_samples_for_new_user)
+                                ),
+                            )
+                            if resolved_user is not None:
+                                person.user_id = resolved_user[0]
+                                person.display_name = resolved_user[1]
+                                observation.user_id = resolved_user[0]
                     current_active_faces[person_id] = observation
 
                     self.session_logger.log_observation(
@@ -252,7 +342,10 @@ class VideoWorker(QThread):
                     frame = annotate_frame(frame, annotations)
 
                 current_metrics = build_current_metrics(self.session)
-                session_metrics = build_session_metrics(self.session)
+                session_metrics = build_session_metrics(
+                    self.session,
+                    min_observations=self.settings.app.session_stats_min_observations,
+                )
 
                 elapsed = max(time.perf_counter() - loop_started, 1e-6)
                 instant_fps = 1.0 / elapsed
@@ -294,8 +387,20 @@ class VideoWorker(QThread):
 
         finally:
             try:
-                summary = build_full_summary(self.session)
+                summary = build_full_summary(
+                    self.session,
+                    min_observations=self.settings.app.session_stats_min_observations,
+                )
                 summary_path = str(self.session_logger.write_summary(summary))
+                if self.user_database is not None:
+                    try:
+                        self.user_database.save_session(self.session, summary_path)
+                    except Exception as error:
+                        logger.exception("Не удалось сохранить данные сессии в базу: %s", error)
+                        self.session_logger.log_event(
+                            f"Не удалось сохранить данные сессии в базу: {error}",
+                            level=logging.WARNING,
+                        )
                 self.session_logger.log_event(
                     f"Сессия {self.session.session_id} завершена. "
                     f"Итоговый отчет сохранен: {summary_path}"

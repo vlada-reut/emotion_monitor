@@ -26,6 +26,7 @@ class TrackDetection:
 @dataclass(slots=True)
 class FaceObservation:
     person_id: int
+    user_id: int | None
     timestamp: str
     bbox: tuple[int, int, int, int]
     emotion: str
@@ -37,6 +38,7 @@ class FaceObservation:
     def to_dict(self) -> dict[str, Any]:
         return {
             "person_id": self.person_id,
+            "user_id": self.user_id,
             "timestamp": self.timestamp,
             "bbox": list(self.bbox),
             "emotion": self.emotion,
@@ -50,6 +52,8 @@ class FaceObservation:
 @dataclass(slots=True)
 class SessionPerson:
     person_id: int
+    user_id: int | None
+    display_name: str | None
     first_seen: str
     last_seen: str
     track_ids: set[int] = field(default_factory=set)
@@ -59,6 +63,7 @@ class SessionPerson:
     age_group_counter: Counter[str] = field(default_factory=Counter)
     last_observation: FaceObservation | None = None
     embedding: list[float] | None = None
+    embeddings: list[list[float]] = field(default_factory=list)
 
     def register_observation(
         self,
@@ -78,7 +83,11 @@ class SessionPerson:
         if observation.age_group:
             self.age_group_counter[observation.age_group] += 1
         if embedding is not None:
-            self.embedding = embedding
+            normalized_embedding = [float(value) for value in embedding]
+            self.embedding = normalized_embedding
+            self.embeddings.append(normalized_embedding)
+            if len(self.embeddings) > 6:
+                self.embeddings.pop(0)
 
     def dominant_emotion(self) -> str:
         if not self.emotion_counter:

@@ -9,7 +9,8 @@
     "detector_confidence": 0.4,
     "detector_imgsz": 256,
     "tracker_max_distance": 70,
-    "tracker_max_missing": 12
+    "tracker_max_missing": 12,
+    "session_stats_min_observations": 3
   },
   "models": {
     "face_detector_path": "weights/face_yolov8n.pt"
@@ -24,5 +25,14 @@
   },
   "logging": {
     "logs_dir": "logs"
+  },
+  "database": {
+    "path": "data/emotion_monitor.db",
+    "similarity_threshold": 0.74,
+    "search_limit": 100,
+    "max_embeddings_per_user": 12,
+    "min_samples_for_new_user": 3,
+    "identity_retry_interval_frames": 10,
+    "min_face_size_for_identity": 96
   }
 }
