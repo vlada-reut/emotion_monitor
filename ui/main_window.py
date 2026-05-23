@@ -31,7 +31,7 @@ SOFT_BLUE = "#5f88e8"
 SOFT_BLUE_HOVER = "#4f79dc"
 ALERT_RED = "#ff4d5f"
 UNAVAILABLE_WEATHER_TEXT = (
-    "Погодные данные пока недоступны. Связь между погодой и настроением аудитории "
+    "Погодные данные пока недоступны. Связь между погодой и настроением "
     "будет рассчитана после обновления прогноза."
 )
 
@@ -110,17 +110,15 @@ class MainWindow(QMainWindow):
         self.session_mode_button.setCheckable(True)
         self.session_mode_button.clicked.connect(lambda: self.set_mode("session"))
 
-        self.monitoring_page_button = QPushButton("РњРѕРЅРёС‚РѕСЂРёРЅРі")
+        self.monitoring_page_button = QPushButton("Мониторинг")
         self.monitoring_page_button.setObjectName("sectionButton")
         self.monitoring_page_button.setCheckable(True)
         self.monitoring_page_button.setChecked(True)
-        self.monitoring_page_button.setText("\u041c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433")
         self.monitoring_page_button.clicked.connect(lambda: self.set_page("monitoring"))
 
-        self.users_page_button = QPushButton("РџРѕР»СЊР·РѕРІР°С‚РµР»Рё")
+        self.users_page_button = QPushButton("Пользователи")
         self.users_page_button.setObjectName("sectionButton")
         self.users_page_button.setCheckable(True)
-        self.users_page_button.setText("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438")
         self.users_page_button.clicked.connect(lambda: self.set_page("users"))
 
         self.start_button = QPushButton("Начать мониторинг")
@@ -206,9 +204,8 @@ class MainWindow(QMainWindow):
         controls_layout.setContentsMargins(16, 12, 16, 12)
         controls_layout.setSpacing(12)
 
-        section_caption = QLabel("Р Р°Р·РґРµР»")
+        section_caption = QLabel("Раздел")
         section_caption.setObjectName("controlLabel")
-        section_caption.setText("\u0420\u0430\u0437\u0434\u0435\u043b")
 
         section_switch = QWidget()
         section_switch.setObjectName("sectionSwitch")
@@ -645,23 +642,23 @@ class MainWindow(QMainWindow):
 
         if mood in positive_moods and weather_positive:
             return (
-                f"В группе наблюдается {mood} настроение, хорошая погода сочетается "
-                f"с комфортным эмоциональным фоном аудитории."
+                f"Наблюдается {mood} настроение, хорошая погода сочетается "
+                f"с комфортным эмоциональным фоном."
             )
         if mood in positive_moods and weather_negative:
             return (
-                f"В группе сохраняется {mood} настроение, погодный фон сейчас не "
-                f"ухудшает общее состояние аудитории."
+                f"Сохраняется {mood} настроение, погодный фон сейчас не "
+                f"ухудшает общее состояние."
             )
         if mood in negative_moods and weather_positive:
             return (
-                f"В группе заметно {mood} настроение, вероятно, на эмоциональный фон "
+                f"Заметно {mood} настроение, вероятно, на эмоциональный фон "
                 f"сильнее влияют внутренние факторы, а не погодные условия."
             )
         if mood in negative_moods and weather_negative:
             return (
-                f"В группе преобладает {mood} настроение, неблагоприятная погода может "
-                f"дополнительно усиливать общий напряженный или утомленный фон аудитории."
+                f"Преобладает {mood} настроение, неблагоприятная погода может "
+                f"дополнительно усиливать общий напряженный или утомленный эмоциональный фон."
             )
         return "Связь между настроением и погодными условиями требует накопления дополнительных наблюдений."
 
