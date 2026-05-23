@@ -26,7 +26,7 @@ class SummaryPanel(QWidget):
         self.weather_description_inline.setObjectName("weatherDescriptionInline")
         self.weather_temperature = QLabel("—")
 
-        self.summary_title = QLabel("Анализ взаимосвязи")
+        self.summary_title = QLabel("Текстовая сводка")
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
         self.summary_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
